@@ -72,11 +72,11 @@ pub struct AccumulateArgs {
     pub start_value: f64,
 
     /// Leverage to be held constant over the entire series (releverages continuously between points)
-    #[arg(long, conflicts_with("pointwise_leverage"))]
+    #[arg(long, conflicts_with("pointwise_leverage"), allow_hyphen_values(true))]
     pub continuous_leverage: Option<f64>,
 
     /// Leverage to be held constant over the entire series (releverages discretely at every point)
-    #[arg(long, conflicts_with("continuous_leverage"))]
+    #[arg(long, conflicts_with("continuous_leverage"), allow_hyphen_values(true))]
     pub pointwise_leverage: Option<f64>,
 }
 
