@@ -72,12 +72,16 @@ pub struct AccumulateArgs {
     pub start_value: f64,
 
     /// Leverage to be held constant over the entire series (releverages continuously between points)
-    #[arg(long, conflicts_with("pointwise_leverage"), allow_hyphen_values(true))]
+    #[arg(long, conflicts_with_all(["pointwise_leverage", "initial_leverage"]), allow_hyphen_values(true))]
     pub continuous_leverage: Option<f64>,
 
     /// Leverage to be held constant over the entire series (releverages discretely at every point)
-    #[arg(long, conflicts_with("continuous_leverage"), allow_hyphen_values(true))]
+    #[arg(long, conflicts_with_all(["continuous_leverage", "initial_leverage"]), allow_hyphen_values(true))]
     pub pointwise_leverage: Option<f64>,
+
+    /// Leverage at t=0, never releveraged
+    #[arg(long, conflicts_with_all(["continuous_leverage", "pointwise_leverage"]), allow_hyphen_values(true))]
+    pub initial_leverage: Option<f64>,
 }
 
 pub fn accumulate(returns: impl Iterator<Item = f64>, args: &AccumulateArgs) -> Vec<f64> {
@@ -95,6 +99,12 @@ pub fn accumulate(returns: impl Iterator<Item = f64>, args: &AccumulateArgs) -> 
             .map(|r| (1.0 + ((r - 1.0) * pointwise_leverage)).max(0.0))
             .map(|r| {let v = acc * r; acc = v; v})
             .collect()
+    } else if let Some(initial_leverage) = args.initial_leverage {
+        acc = args.start_value * initial_leverage;
+        returns
+            .map(|r| {let v = acc * r; acc = v; v})
+            .map(|a| a - args.start_value * (initial_leverage - 1.0))
+            .collect()
     } else {
         returns
             .map(|r| {let v = acc * r; acc = v; v})
@@ -105,6 +115,7 @@ pub fn accumulate(returns: impl Iterator<Item = f64>, args: &AccumulateArgs) -> 
 #[cfg(test)]
 mod tests {
     use super::gen_returns;
+    use assert_approx_eq::assert_approx_eq;
 
     #[test]
     fn gen_returns_with_fixed_seed() {
@@ -139,6 +150,7 @@ mod tests {
             start_value: 100.0,
             continuous_leverage: None,
             pointwise_leverage: None,
+            initial_leverage: None,
         };
         let returns: Vec<f64> = vec![1.04, 1.01, 0.99, 0.98, 1.05, 1.1, 0.4];
         let res = super::accumulate(returns.into_iter(), &args);
@@ -154,13 +166,14 @@ mod tests {
     }
 
     #[test]
-    fn accumulate_with_leverage_test() {
+    fn accumulate_with_continuous_leverage_test() {
         let leverage = 5.0;
         let args = super::AccumulateArgs {
             accumulate: true,
             start_value: 1.0,
             continuous_leverage: Some(leverage),
             pointwise_leverage: None,
+            initial_leverage: None,
         };
         let returns: Vec<f64> = vec![1.04, 1.01, 0.99, 0.98, 1.05, 1.1, 0.4];
         let leveraged_returns: Vec<f64> = returns.clone().iter().map(|r| r.powf(leverage)).collect();
@@ -174,5 +187,24 @@ mod tests {
             1.0 * leveraged_returns.iter().take(6).product::<f64>(),
             1.0 * leveraged_returns.iter().take(7).product::<f64>(),
         ], res);
+    }
+
+    #[test]
+    fn accumulate_with_initial_leverage_test() {
+        let leverage = 5.0;
+        let args = super::AccumulateArgs {
+            accumulate: true,
+            start_value: 10.0,
+            continuous_leverage: None,
+            pointwise_leverage: None,
+            initial_leverage: Some(leverage),
+        };
+        let returns: Vec<f64> = vec![1.04, 1.01, 0.99, 0.98, 1.05, 1.1, 0.4];
+        let res = super::accumulate(returns.clone().into_iter(), &args);
+        let mut ret_product = 1.0;
+        for (ret, acc) in std::iter::zip(returns, res) {
+            ret_product *= ret;
+            assert_approx_eq!(50.0 * ret_product - 40.0, acc);
+        }
     }
 }

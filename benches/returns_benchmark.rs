@@ -18,6 +18,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let accumulate_args = AccumulateArgs {
         accumulate: true,
         start_value: 100.0,
+        continuous_leverage: None,
+        pointwise_leverage: None,
+        initial_leverage: None,
     };
     let ret_series = returns::gen_returns(black_box(&gen_returns_args)).collect::<Vec<f64>>();
     c.bench_function(
